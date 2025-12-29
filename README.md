@@ -19,10 +19,13 @@ is directly flashed to the microcontroller via ISP without using the
 Arduino bootloader.
 
 The hardware setup is as follows:
-* Arduino Pro Mini, 5V variant at 16 MHz with an Microchip Atmega 328P
+* 1x Arduino Pro Mini, 5V variant at 16 MHz with an Microchip Atmega 328P
 microcontroller (Atmega 328PB may also work)
-* DRV8833 based motor controller breakout board
-* 1 Ohm 0.5W metal film resistor with 1% accuracy as a shunt
+* 1x DRV8833 based motor controller breakout board
+* 1x 1 Ohm 0.5W metal film resistor with 1% accuracy as a shunt
+* 2x 5V gear motor
+* 1x RC receiver with at least two channels as PPM outputs used to 
+control the motors
 
 Wiring on a breadboard:
 * Pro Mini pin "GND" --> GND
@@ -49,9 +52,9 @@ Do not forget to power your receiver with a suitable power supply.
 Please, consult the datasheets of your Arduino board and your DRV8833 
 breakout board to choose a suitable VCC supply voltage.
 
-Also keep in mind that the voltage of PPM signal of your receiver, shall 
-never exceed the maximum ratings of the microcontroller. Consult the 
-datasheet of the micrcontroller to learn about the allowed maximum 
+Also keep in mind that the voltage of the PPM signal of your receiver
+shall never exceed the maximum ratings of the microcontroller. Consult 
+the datasheet of the micrcontroller to learn about the allowed maximum 
 ratings.
 
 __WARNING__

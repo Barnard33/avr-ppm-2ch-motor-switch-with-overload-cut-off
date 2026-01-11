@@ -47,6 +47,12 @@ Wiring on a breadboard:
 * Receiver channel for motor 1 GND --> GND
 * Receiver channel for motor 2 GND --> GND
 
+The current code assumes, that the servo signals comming from a RC 
+receiver are inverted for proper voltage shifting (not shown in the
+wiring above). To adjust the code to a usual non-inverted servo signal,
+just invert the ISR edge configuration in lines where the assumtption is 
+commented.
+
 Do not forget to power your receiver with a suitable power supply. 
 
 Please, consult the datasheets of your Arduino board and your DRV8833 

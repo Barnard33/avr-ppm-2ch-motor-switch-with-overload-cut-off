@@ -274,6 +274,13 @@ inline uint16_t read_adc(void)
     return ADC; // return 10-bit result (0 - 1023)
 }
 
+inline void configure_timer_1(void) {
+    OCR1A = 8000; // compare at 8000 ticks at prescaler 1 means interrupt every 1 ms
+    TIMSK1 |= (1 << OCIE1A); // enable interrupt on compare A match
+    TCCR1B |= (1 << WGM12); // enable CTC mode which clears TC1 when it matches OCR1A
+    TCCR1B |= (1 << CS10); // start timer with prescaler 1
+}
+
 inline uint8_t read_timer_0(void)
 {
     return TCNT0;
@@ -344,7 +351,7 @@ inline void configure_int_0_falling_edge(void)
 inline void configure_int_0(void)
 {
     EIMSK |= (1 << INT0); // enable int 0
-    configure_int_0_rising_edge();
+    configure_int_0_falling_edge(); // assumption: inverted servo signal
     configure_in_pin(int0_hal, PULL_UP_DISABLED);
 }
 
@@ -367,7 +374,7 @@ inline void configure_int_1_falling_edge(void)
 inline void configure_int_1(void)
 {
     EIMSK |= (1 << INT1); // enable int 1
-    configure_int_1_rising_edge();
+    configure_int_1_falling_edge(); // assumption: inverted servo signal
     configure_in_pin(int1_hal, PULL_UP_DISABLED);
 }
 
@@ -414,15 +421,19 @@ volatile servo_state_t servo_in_0 = SERVO_N;
 
 volatile servo_state_t servo_in_1 = SERVO_N;
 
+volatile uint8_t servo_in_0_watchdog = 0;
+
+volatile uint8_t servo_in_1_watchdog = 0;
+
 /**
  * Interrupt handler for servo signal input pin on int0.
  */
 ISR(INT0_vect)
 {
-    if(is_int0_rising_edge()) {
+    if(!is_int0_rising_edge()) { // assumption: inverted servo signal
         reset_timer_0();
         start_timer_0();
-        configure_int_0_falling_edge();
+        configure_int_0_rising_edge(); // assumption: inverted servo signal
     } else {
         stop_timer_0();
         if(has_timer_0_overflow()) {
@@ -431,8 +442,11 @@ ISR(INT0_vect)
             reset_timer_0();
         } else {
             servo_in_0 = evaluate_servo_state(read_timer_0());
+            if(servo_in_0 > SERVO_INVALID) {
+                servo_in_0_watchdog = 0;
+            }
         }
-        configure_int_0_rising_edge();
+        configure_int_0_falling_edge(); // assumption: inverted servo signal
     }
 }
 
@@ -441,10 +455,10 @@ ISR(INT0_vect)
  */
 ISR(INT1_vect)
 {
-    if(is_int1_rising_edge()) {
+    if(!is_int1_rising_edge()) { // assumption: inverted servo signal
         reset_timer_2();
         start_timer_2();
-        configure_int_1_falling_edge();
+        configure_int_1_rising_edge(); // assumption: inverted servo signal
     } else {
         stop_timer_2();
         if(has_timer_2_overflow()) {
@@ -453,12 +467,24 @@ ISR(INT1_vect)
             reset_timer_2();
         } else {
             servo_in_1 = evaluate_servo_state(read_timer_2());
+            if(servo_in_1 > SERVO_INVALID) {
+                servo_in_1_watchdog = 0;
+            }
         }
-        configure_int_1_rising_edge();
+        configure_int_1_falling_edge(); // assumption: inverted servo signal
     }
 }
 
-// defined as constants, so that the double evaluation is done by during 
+/**
+ * Interrupt handler servo int 0 and 1 watchdog.
+ */
+ISR(TIMER1_COMPA_vect)
+{
+    servo_in_0_watchdog += 1;
+    servo_in_1_watchdog += 1;
+}
+
+// defined as constants, so that the double evaluation is done during 
 // compile time and linking the floating point library is not necessary
 const uint16_t ADC_MAX_VALUE_ONE_MOTOR = VOLTAGE_TO_ADC_TICKS(MAX_VOLTAGE_ONE_MOTOR);
 const uint16_t ADC_MAX_VALUE_TWO_MOTORS = VOLTAGE_TO_ADC_TICKS(MAX_VOLTAGE_ONE_MOTOR) + VOLTAGE_TO_ADC_TICKS(ADDITIONAL_VOLTAGE_2ND_MOTOR);
@@ -478,6 +504,8 @@ int main(void)
 
     configure_int_0();
     configure_int_1();
+    
+    configure_timer_1(); // used for a timebase to switch motors off if servo signal is missing
 
     led(ON);
     _delay_ms(1000);
@@ -513,8 +541,17 @@ int main(void)
         }
 
         // start/stop the motors according to the servo signals
-        handle_motor(MOTOR_1, servo_in_0, inhibited);
-        handle_motor(MOTOR_2, servo_in_1, inhibited);
+        if(servo_in_0_watchdog > 30) {
+            servo_in_0 = SERVO_INVALID;
+            motor_off(MOTOR_1);
+        }
+        else handle_motor(MOTOR_1, servo_in_0, inhibited);
+        
+        if(servo_in_1_watchdog > 30) {
+            servo_in_1 = SERVO_INVALID;
+            motor_off(MOTOR_2);
+        }
+        else handle_motor(MOTOR_2, servo_in_1, inhibited);
     }
     return 0;
 }
